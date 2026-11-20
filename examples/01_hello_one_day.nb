@@ -1,0 +1,26 @@
+# Example 1: Learn Nabda in One Day — Basics, Units & Safety
+# Simple Python-like syntax + Rust-grade safety + zero semicolons
+
+fn calculate_power(volts_mv: float, amps: float) -> float:
+    return (volts_mv / 1000.0) * amps
+
+fn main():
+    let language = "Nabda (نبضة)"
+    var stage = 1
+    stage += 1
+
+    io::println("Welcome to " + language + " | Stage " + stage)
+
+    # First-class hardware physical unit literals
+    let vcore = 1.15V
+    let target_clk = 4.2GHz
+    let pulse = 250us
+
+    io::println("Target VCORE: " + vcore + ", Clock: " + target_clk + ", Pulse: " + pulse)
+
+    for core in 0..4:
+        cpu::set_freq(core, target_clk)
+        io::println("Core #" + core + " running at " + cpu::get_freq(core))
+
+    let watts = calculate_power(1150.0, 38.5)
+    io::println("Estimated package power: " + watts + " W")

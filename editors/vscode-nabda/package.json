@@ -1,0 +1,109 @@
+{
+  "name": "vscode-nabda",
+  "displayName": "Nabda (نبضة) — Hardware, Kernel & Cybersecurity Language",
+  "description": "Full VS Code support for Nabda (.nb): smart autocomplete for memory::/hardware::/power::/cpu::/gpu::/security::/kernel::, instant error explanations, and 1-click auto-fix.",
+  "version": "0.1.0",
+  "publisher": "nabda-lang",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Snippets"
+  ],
+  "activationEvents": [
+    "onLanguage:nabda"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "nabda",
+        "aliases": ["Nabda", "nabda"],
+        "extensions": [".nb"],
+        "filenames": ["nabda.toml"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "nabda",
+        "scopeName": "source.nabda",
+        "path": "./syntaxes/nabda.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "nabda",
+        "path": "./snippets/nabda.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "nabda.runFile",
+        "title": "Nabda: Run Current File"
+      },
+      {
+        "command": "nabda.fixFile",
+        "title": "Nabda: Auto-Fix Errors & Security Issues"
+      },
+      {
+        "command": "nabda.checkFile",
+        "title": "Nabda: Check Types, Hardware & Security"
+      },
+      {
+        "command": "nabda.buildNative",
+        "title": "Nabda: Build Standalone Native Executable"
+      },
+      {
+        "command": "nabda.buildKernel",
+        "title": "Nabda: Build Bare-Metal x86_64 Kernel"
+      },
+      {
+        "command": "nabda.probeHardware",
+        "title": "Nabda: Probe Hardware & Power Rails"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "nabda.runFile",
+        "key": "ctrl+alt+n",
+        "mac": "cmd+alt+n",
+        "when": "editorLangId == nabda"
+      },
+      {
+        "command": "nabda.fixFile",
+        "key": "ctrl+alt+f",
+        "mac": "cmd+alt+f",
+        "when": "editorLangId == nabda"
+      }
+    ],
+    "configuration": {
+      "title": "Nabda Language",
+      "properties": {
+        "nabda.executablePath": {
+          "type": "string",
+          "default": "nabda",
+          "description": "Path to the nabda CLI binary"
+        },
+        "nabda.lspPath": {
+          "type": "string",
+          "default": "nabda-lsp",
+          "description": "Path to the nabda-lsp Language Server binary"
+        },
+        "nabda.diagnosticLanguage": {
+          "type": "string",
+          "enum": ["both", "en", "ar"],
+          "default": "both",
+          "description": "Language for error explanations and auto-fix descriptions"
+        },
+        "nabda.autoFixOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically apply safe Nabda auto-fixes when saving .nb files"
+        }
+      }
+    }
+  }
+}

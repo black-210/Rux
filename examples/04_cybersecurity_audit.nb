@@ -1,0 +1,35 @@
+# Example 4: Cybersecurity, Hardware Attestation, W^X Memory Audit & Packet Inspection
+
+fn main():
+    # 1. Enable kernel & process exploit mitigations
+    security::enable_aslr()
+    security::enable_dep_nx()
+    security::enable_stack_canary()
+
+    # 2. Allocate secure zeroed key buffer and wipe it safely after use
+    let key_mem = memory::alloc_zeroed(64)
+    memory::protect(key_mem, 64, "RW")
+    let audit = security::audit_memory_region(key_mem, 64)
+    io::println("Memory W^X Audit: " + audit)
+    memory::zero_secure(key_mem, 64)
+    memory::free(key_mem)
+
+    # 3. Cryptographic SHA-256, HMAC, CSPRNG & Constant-Time Verification
+    let nonce = security::csprng_bytes(16)
+    let digest = security::hash_sha256("nabda-firmware-image-v1")
+    let mac = security::hmac_sha256("hardware-root-key", digest)
+    let mac_valid = security::constant_time_eq(mac, mac)
+    io::println("CSPRNG Nonce: " + nonce)
+    io::println("Firmware SHA-256: " + digest)
+    io::println("HMAC Verified (constant-time): " + mac_valid)
+
+    # 4. TPM Measured Boot PCR Extension
+    let pcr0 = security::tpm_attest(0, digest)
+    io::println("TPM PCR[0]: " + pcr0)
+
+    # 5. Deep Packet Inspection & Kernel Firewall Rules
+    security::firewall_rule("DROP", "TCP", 23)
+    security::firewall_rule("ALLOW", "TCP", 443)
+    let suspicious_pkt = "4500002800010000400600000a0000010a00000204d2005000000001000000005000000000000000"
+    let inspection = security::inspect_packet(suspicious_pkt)
+    io::println("Packet Inspection: " + inspection)

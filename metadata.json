@@ -1,0 +1,6 @@
+{
+  "name": "Nabda Programming Language",
+  "description": "Standalone Rust-written systems, hardware, OS kernel, and cybersecurity programming language with instant auto-fix compiler, native/kernel codegen, FFI, and VS Code LSP.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

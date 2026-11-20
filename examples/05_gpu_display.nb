@@ -1,0 +1,21 @@
+# Example 5: GPU Compute Dispatch, VRAM Allocation & Direct Display Framebuffer
+
+fn main():
+    io::println("Detected GPUs: " + gpu::list())
+    gpu::set_clock(0, 1950MHz)
+    gpu::set_vram_clock(0, 7500MHz)
+    gpu::set_power_limit(0, 220.0)
+
+    let vram_buf = gpu::alloc_vram(0, 16384)
+    io::println("Allocated VRAM at " + io::hex(vram_buf) + " | GPU Temp: " + gpu::get_temp(0) + " C")
+    gpu::dispatch_compute(0, "raytrace_kernel", 512)
+    memory::free(vram_buf)
+
+    # Direct Display Controller & Framebuffer Drawing
+    display::set_mode(0, 1920, 1080, 144)
+    display::set_brightness(0, 90)
+    display::clear(0x0B1020)
+    display::fill_rect(100, 100, 320, 180, 0x00FFAA)
+    display::draw_pixel(10, 10, 0xFFFFFF)
+    display::present()
+    io::println("Displays: " + display::list())

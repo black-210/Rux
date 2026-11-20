@@ -1,0 +1,40 @@
+# Example 3: OS Kernel Boot, GDT/IDT/Paging, MMIO VGA Buffer & Direct Memory
+
+fn write_vga_banner(vga_addr: addr, text: str):
+    # Write 'NABDA' into VGA text buffer 0xB8000 (white on black 0x0F)
+    memory::write_u16(vga_addr + 0, 0x0F4E)
+    memory::write_u16(vga_addr + 2, 0x0F41)
+    memory::write_u16(vga_addr + 4, 0x0F42)
+    memory::write_u16(vga_addr + 6, 0x0F44)
+    memory::write_u16(vga_addr + 8, 0x0F41)
+    kernel::log("VGA", text)
+
+fn main():
+    let boot = kernel::boot_info()
+    io::println("Boot Map: " + boot)
+    io::println("Current Privilege Ring: " + kernel::ring_level())
+
+    unsafe_hardware:
+        cpu::disable_interrupts()
+        kernel::init_gdt()
+        kernel::init_idt()
+        kernel::init_paging()
+
+        # Map VGA text-mode MMIO and write directly to screen memory
+        let vga = memory::map_mmio(0xB8000, 4096)
+        write_vga_banner(vga, "Written 'NABDA' to 0xB8000 MMIO")
+
+        # Serial COM1 port (0x3F8) output
+        hardware::port_out_u8(0x3F8, 0x4F)
+        hardware::port_out_u8(0x3F8, 0x4B)
+        cpu::enable_interrupts()
+
+    # Kernel DMA buffer & page protection
+    let dma = memory::alloc_aligned(4096, 4096)
+    memory::write_u32(dma, 0xCAFE_BABE)
+    io::println("DMA[0] = " + io::hex(memory::read_u32(dma)))
+    memory::protect(dma, 4096, "RW")
+    memory::free(dma)
+
+    let pid = kernel::create_task("net_watchdog", 1)
+    kernel::log("SCHED", "Spawned kernel task PID=" + pid)

@@ -1,0 +1,21 @@
+# Example 7: Auto-Fix Demo (Intentionally Broken File)
+# Run: nabda check examples/07_autofix_demo.nb
+# Then run: nabda fix examples/07_autofix_demo.nb --dry-run
+
+fn main()
+    let retries = 0
+    retries = retries + 1
+
+    # Dangerous over-voltage (1.95V) caught by hardware safety!
+    power::set_voltage("VCORE", 1.95V)
+
+    # Typo in module name (`memroy::` instead of `memory::`)
+    let buf = memroy::alloc(4096)
+
+    # Security vulnerability: RWX memory page
+    memory::protect(buf, 4096, "RWX")
+
+    # Security vulnerability: timing-unsafe secret comparison
+    let api_token = "nabda_secret_99"
+    let ok = api_token == "nabda_secret_99"
+    memory::free(buf)

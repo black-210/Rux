@@ -1,0 +1,41 @@
+# Example 2: Direct Hardware, Power/Voltage, Clock, Fan & PWM Pulse Control
+
+fn apply_thermal_fan_curve(temp_c: float) -> int:
+    if temp_c >= 75.0:
+        return 95
+    elif temp_c >= 60.0:
+        return 70
+    elif temp_c >= 45.0:
+        return 50
+    else:
+        return 35
+
+fn main():
+    io::println("--- Hardware & Power Telemetry ---")
+    let rails = power::rails()
+    io::println("Available power rails: " + rails)
+
+    # Safe voltage tuning (guarded automatically by Nabda compiler!)
+    power::set_voltage("VCORE", 1.18V)
+    power::set_voltage("VDDQ", 1.25V)
+    power::set_power_limit(95.0)
+
+    let vcore_w = power::get_watts("VCORE")
+    io::println("VCORE = " + power::get_voltage("VCORE") + " | Power = " + vcore_w + " W")
+
+    # Thermal sensor & dynamic fan speed control
+    let cpu_temp = hardware::sensor_temp("cpu")
+    let duty = apply_thermal_fan_curve(cpu_temp)
+    hardware::fan_set_speed(0, duty)
+    io::println("CPU Temp: " + cpu_temp + " C -> Fan #0 set to " + duty + "% (" + hardware::fan_get_rpm(0) + " RPM)")
+
+    # GPIO & PWM pulse waveform control
+    hardware::gpio_mode(18, hardware::OUTPUT)
+    hardware::gpio_write(18, hardware::HIGH)
+    hardware::pwm_pulse(12, 25kHz, 75, 10ms)
+    let train = time::pulse_train(8, 100us, 100us)
+    io::println("PWM Pulse Train: " + train)
+
+    # Controlled transient glitch/reset rail pulse inside unsafe_hardware:
+    unsafe_hardware:
+        power::pulse_rail("SOC_IO", 0.78V, 50us)
