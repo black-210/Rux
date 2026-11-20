@@ -1,8 +1,0 @@
-[package]
-name = "nabda_core"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-description = "Core compiler, analyzer, auto-fixer, runtime VM, native/kernel C codegen, and package manager for the Nabda programming language"
-
-[dependencies]

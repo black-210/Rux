@@ -1,0 +1,89 @@
+// rust++ Self-Hosted Memory Leak Protection System (Static Ownership & Escape Graph)
+import "math_diag.rspp"
+
+fn leak_guard_scan_stmts(stmts: list, allocs: map, diags: list):
+    var scope_vars = []
+    for st in stmts:
+        let kind = st.get("kind", "")
+        let line = st.get("line", 1)
+        if kind == "let" or kind == "var":
+            let vname = st.get("name", "")
+            let val = st.get("value", {})
+            if is_alloc_expr(val):
+                if allocs.has(vname):
+                    let prev = allocs.get(vname, {})
+                    if not prev.get("freed", false) and not prev.get("deferred", false):
+                        diags.push(format_diag("LG004", line, f"Overwrite Leak on `{vname}`", f"تسرب ذاكرة عند إعادة تعيين `{vname}`", "Previous allocation was not freed before reassignment.", f"Add `memory::free({vname})` before reassigning.", "RefCount drops 1 -> 0 while Live=true"))
+                allocs.set(vname, {"freed": false, "deferred": false, "returned": false, "line": line})
+                scope_vars.push(vname)
+        elif kind == "defer":
+            let inner = st.get("stmt", {})
+            if inner.get("kind", "") == "expr":
+                let ex = inner.get("expr", {})
+                check_free_call(ex, allocs, diags, line, true)
+        elif kind == "expr":
+            let ex = st.get("expr", {})
+            check_free_call(ex, allocs, diags, line, false)
+        elif kind == "return":
+            let rv = st.get("value", {})
+            if rv.get("kind", "") == "ident":
+                let rname = rv.get("name", "")
+                if allocs.has(rname):
+                    let info = allocs.get(rname, {})
+                    info.set("returned", true)
+        elif kind == "if":
+            for br in st.get("branches", []):
+                leak_guard_scan_stmts(br.get("body", []), allocs, diags)
+            leak_guard_scan_stmts(st.get("else_body", []), allocs, diags)
+        elif kind == "while" or kind == "for" or kind == "loop" or kind == "unsafe_hardware":
+            leak_guard_scan_stmts(st.get("body", []), allocs, diags)
+        elif kind == "try_catch":
+            leak_guard_scan_stmts(st.get("try_body", []), allocs, diags)
+            leak_guard_scan_stmts(st.get("catch_body", []), allocs, diags)
+
+    for sv in scope_vars:
+        let info = allocs.get(sv, {})
+        if not info.get("freed", false) and not info.get("deferred", false) and not info.get("returned", false):
+            let aline = info.get("line", 1)
+            diags.push(format_diag("LG001", aline, f"Memory Leak Guard: `{sv}` escapes scope unfreed", f"حماية تسرب الذاكرة: `{sv}` يخرج بدون تحرير", "Reachability graph found 0 free/defer/return paths.", f"Insert `defer memory::free({sv})` after allocation.", f"OutDegree(free/defer/return) == 0 for `{sv}`"))
+
+fn is_alloc_expr(ex: map) -> bool:
+    if ex.get("kind", "") == "ns_call":
+        let ns = ex.get("ns", "")
+        let fn_name = ex.get("fn", "")
+        if ns == "memory" and fn_name == "alloc":
+            return true
+        if ns == "sdr" and (fn_name == "open" or fn_name == "alloc_iq_buffer"):
+            return true
+        if ns == "gpu" and fn_name == "alloc_vram":
+            return true
+    return false
+
+fn check_free_call(ex: map, allocs: map, diags: list, line: int, via_defer: bool):
+    if ex.get("kind", "") != "ns_call":
+        return
+    let ns = ex.get("ns", "")
+    let fn_name = ex.get("fn", "")
+    if (ns == "memory" and fn_name == "free") or (ns == "sdr" and fn_name == "close"):
+        let args = ex.get("args", [])
+        if args.len() > 0:
+            let a0 = args[0]
+            if a0.get("kind", "") == "ident":
+                let vname = a0.get("name", "")
+                if allocs.has(vname):
+                    let info = allocs.get(vname, {})
+                    if info.get("freed", false) and not via_defer:
+                        diags.push(format_diag("LG002", line, f"Double-Free detected on `{vname}`", f"تحرير مزدوج للذاكرة `{vname}`", "Freeing an already-freed pointer corrupts heap metadata.", "Remove redundant free call.", "StateTransition: Freed -> Free (Illegal)"))
+                    elif via_defer:
+                        info.set("deferred", true)
+                    else:
+                        info.set("freed", true)
+
+fn leak_guard_verify_program(prog: map) -> list:
+    var diags = []
+    for item in prog.get("items", []):
+        let k = item.get("kind", "")
+        if k == "fn" or k == "algorithm":
+            var allocs = {}
+            leak_guard_scan_stmts(item.get("body", []), allocs, diags)
+    return diags

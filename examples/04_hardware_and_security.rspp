@@ -1,0 +1,19 @@
+// Example 04: Hardware Voltage, Fan Thermal Control, & Bare-Metal Kernel Safety
+fn test_leak_protected_buffer():
+    let dma = memory::alloc(4096)
+    defer memory::free(dma)
+    let w_x_ok = memory::protect(dma, 4096, "RX")
+    io::print(f"DMA W^X protection verified: {w_x_ok}")
+
+fn main():
+    power::set_voltage("vcore", 1.25V)
+    hardware::fan_speed(70)
+    hardware::gpio_write(17, true)
+    hardware::pwm_pulse(18, 0.5, 25.0kHz)
+
+    let ok = security::constant_time_eq("rustpp-key-99", "rustpp-key-99")
+    let digest = security::sha256("rust++")
+    io::print(f"Constant-time auth={ok}, sha256={digest}")
+
+    test_leak_protected_buffer()
+    io::print(memory::leak_report())

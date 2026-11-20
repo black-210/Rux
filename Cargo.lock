@@ -3,19 +3,19 @@
 version = 4
 
 [[package]]
-name = "nabda_cli"
-version = "0.1.0"
+name = "rspp_boot"
+version = "0.2.0"
 dependencies = [
- "nabda_core",
+ "rspp_core",
 ]
 
 [[package]]
-name = "nabda_core"
-version = "0.1.0"
+name = "rspp_core"
+version = "0.2.0"
 
 [[package]]
-name = "nabda_lsp"
-version = "0.1.0"
+name = "rspp_lsp"
+version = "0.2.0"
 dependencies = [
- "nabda_core",
+ "rspp_core",
 ]

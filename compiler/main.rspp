@@ -1,0 +1,129 @@
+// rust++ Self-Hosted Compiler Entry Point (zero Rust runtime dependency)
+import "leak_guard.rspp"
+import "codegen_c.rspp"
+
+fn print_help():
+    io::print("rust++ Self-Hosted Compiler v0.2.0 (written 100% in .rspp)")
+    io::print("Commands:")
+    io::print("  check <file.rspp>             Run Leak Guard & Math Diagnostics")
+    io::print("  build <file.rspp> [-o out]    Compile .rspp to native C11 binary (or --target kernel)")
+    io::print("  run   <file.rspp>             Compile & run native binary")
+    io::print("  solve <guess>                 Run Newton-Raphson solver on demo equations")
+    io::print("  synth <fn>                    Generate a rust++ algorithm from examples")
+    io::print("  sdr                           Run SDR FFT spectrum & ASK/OOK demodulation demo")
+    io::print("  probe                         Inspect hardware & Leak Guard status")
+
+fn main() -> int:
+    let args = sys::args()
+    if args.len() < 2:
+        print_help()
+        return 0
+    let cmd = args[1]
+
+    if cmd == "version" or cmd == "--version":
+        io::print("rust++ Self-Hosted Native Compiler v0.2.0 (.rspp)")
+        return 0
+
+    if cmd == "probe":
+        io::print(hardware::probe())
+        io::print(memory::leak_report())
+        return 0
+
+    if cmd == "check":
+        if args.len() < 3:
+            io::eprint("Usage: check <file.rspp>")
+            return 1
+        let file_path = args[2]
+        let prog = load_program_bundle(file_path)
+        let diags = leak_guard_verify_program(prog)
+        if diags.len() == 0:
+            io::print(f"OK (self-hosted): `{file_path}` passed all Leak Guard & static checks (0 issues).")
+            return 0
+        for d in diags:
+            io::eprint(d)
+        return 1
+
+    if cmd == "build":
+        if args.len() < 3:
+            io::eprint("Usage: build <file.rspp> [-o out] [--target native|kernel] [--emit-c]")
+            return 1
+        let file_path = args[2]
+        var out_bin = file_path + ".out"
+        var target = "native"
+        var emit_c_only = false
+        var i = 3
+        while i < args.len():
+            let a = args[i]
+            if (a == "-o" or a == "--output") and i + 1 < args.len():
+                out_bin = args[i + 1]
+                i += 2
+            elif a == "--target" and i + 1 < args.len():
+                target = args[i + 1]
+                i += 2
+            elif a == "--emit-c":
+                emit_c_only = true
+                i += 1
+            else:
+                i += 1
+        let prog = load_program_bundle(file_path)
+        let diags = leak_guard_verify_program(prog)
+        if diags.len() > 0:
+            for d in diags:
+                io::eprint(d)
+            return 1
+        var c_src = ""
+        if target == "kernel":
+            c_src = emit_kernel_c(prog)
+        else:
+            c_src = emit_native_program_c(prog)
+        let c_path = out_bin + ".rspp.c"
+        fs::write_text(c_path, c_src)
+        if emit_c_only:
+            io::print(f"Emitted self-hosted C11: {c_path}")
+            return 0
+        var gcc_cmd = f"gcc -std=c11 -O2 {c_path} -o {out_bin} -lm"
+        if target == "kernel":
+            gcc_cmd = f"gcc -std=c11 -ffreestanding -nostdlib -fno-stack-protector -O2 -c {c_path} -o {out_bin}"
+        let rc = sys::exec(gcc_cmd)
+        if rc != 0:
+            io::eprint(f"gcc failed with exit code {rc}")
+            return 1
+        io::print(f"Built {target} via self-hosted compiler: {out_bin}")
+        return 0
+
+    if cmd == "run":
+        if args.len() < 3:
+            io::eprint("Usage: run <file.rspp>")
+            return 1
+        let file_path = args[2]
+        let prog = load_program_bundle(file_path)
+        let c_src = emit_native_program_c(prog)
+        let tmp_c = "/tmp/rspp_selfhost_run.c"
+        let tmp_bin = "/tmp/rspp_selfhost_run"
+        fs::write_text(tmp_c, c_src)
+        let rc = sys::exec(f"gcc -std=c11 -O2 {tmp_c} -o {tmp_bin} -lm")
+        if rc != 0:
+            return 1
+        return sys::exec(tmp_bin)
+
+    if cmd == "synth":
+        var fn_name = "generated_rule"
+        if args.len() >= 3:
+            fn_name = args[2]
+        let code = synth::synthesize_from_examples(fn_name, [1, 2, 3, 4], [4, 7, 10, 13])
+        io::print(code)
+        return 0
+
+    if cmd == "sdr":
+        let dev = sdr::open("sim")
+        defer sdr::close(dev)
+        sdr::set_center_freq(dev, 433.92MHz)
+        sdr::set_sample_rate(dev, 2.4Msps)
+        let iq = sdr::capture_iq(dev, 32)
+        let spec = sdr::fft_spectrum(iq)
+        let bits = sdr::demod_ask_ook(iq, 0.5)
+        io::print(f"SDR FFT bins: {spec.len()}, OOK bits: {bits}")
+        return 0
+
+    print_help()
+    return 0

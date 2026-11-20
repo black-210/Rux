@@ -1,0 +1,13 @@
+// Example 01: Direct Mathematical Equations, Implicit Multiplication & Newton-Raphson Solver
+equation quadratic(x) = x^2 - 5x + 6
+equation kinetic(m, v) = 0.5 * m * v^2
+
+fn main():
+    let root = math::solve("quadratic", 4.0)
+    let slope = math::derivative("quadratic", 4.0)
+    let integral = math::integrate("quadratic", 0.0, 3.0)
+    let ke = kinetic(2.0, 10.0)
+    io::print(f"Root near 4.0 = {root}")
+    io::print(f"Derivative at 4.0 = {slope}")
+    io::print(f"Integral [0..3] = {integral}")
+    io::print(f"Kinetic Energy = {ke}")

@@ -1,0 +1,22 @@
+// Example 02: Native Software-Defined Radio (SDR) + Windowed-Sinc DSP
+fn run_radio():
+    let dev = sdr::open("rtlsdr")
+    defer sdr::close(dev)
+
+    sdr::set_center_freq(dev, 433.92MHz)
+    sdr::set_sample_rate(dev, 2.4Msps)
+    sdr::set_bandwidth(dev, 1.5MHz)
+    sdr::set_gain(dev, 24.0)
+
+    let iq = sdr::capture_iq(dev, 64)
+    let spectrum = sdr::fft_spectrum(iq)
+    let ook_bits = sdr::demod_ask_ook(iq, 0.5)
+    let snr = sdr::snr_db(iq)
+
+    io::print(f"Captured IQ floats: {iq.len()}, FFT bins: {spectrum.len()}")
+    io::print(f"Estimated SNR: {snr} dB")
+    io::print(f"Decoded OOK bits sample: {ook_bits}")
+
+fn main():
+    run_radio()
+    io::print(memory::leak_report())

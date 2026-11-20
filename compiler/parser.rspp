@@ -1,0 +1,563 @@
+// rust++ Self-Hosted Recursive-Descent Parser (written in rust++ itself)
+
+fn new_parser(tokens: list) -> map:
+    return {"tokens": tokens, "pos": 0, "in_eq": false}
+
+fn p_cur(p: map) -> map:
+    let toks = p.get("tokens", [])
+    let pos = p.get("pos", 0)
+    if pos < toks.len():
+        return toks[pos]
+    return toks[toks.len() - 1]
+
+fn p_adv(p: map) -> map:
+    let t = p_cur(p)
+    let pos = p.get("pos", 0)
+    if t.get("kind", "") != "EOF":
+        p.set("pos", pos + 1)
+    return t
+
+fn p_is(p: map, kind: str, val: str) -> bool:
+    let t = p_cur(p)
+    return t.get("kind", "") == kind and t.get("val", "") == val
+
+fn p_is_kind(p: map, kind: str) -> bool:
+    return p_cur(p).get("kind", "") == kind
+
+fn p_consume(p: map, kind: str, val: str) -> bool:
+    if p_is(p, kind, val):
+        p_adv(p)
+        return true
+    return false
+
+fn p_skip_nl(p: map):
+    while p_is_kind(p, "NEWLINE") or p_is(p, "PUNCT", ";"):
+        p_adv(p)
+
+fn parse_tokens(tokens: list) -> map:
+    var p = new_parser(tokens)
+    var items = []
+    p_skip_nl(p)
+    while not p_is_kind(p, "EOF"):
+        if p_is_kind(p, "DEDENT"):
+            p_adv(p)
+            p_skip_nl(p)
+            continue
+        let before = p.get("pos", 0)
+        let it = parse_item(p)
+        if it.len() > 0:
+            items.push(it)
+        if p.get("pos", 0) == before:
+            p_adv(p)
+        p_skip_nl(p)
+    return {"kind": "program", "items": items}
+
+fn parse_item(p: map) -> map:
+    while p_is(p, "PUNCT", "@"):
+        p_adv(p)
+        p_adv(p)
+        if p_consume(p, "PUNCT", "("):
+            while not p_is(p, "PUNCT", ")") and not p_is_kind(p, "EOF"):
+                p_adv(p)
+            p_consume(p, "PUNCT", ")")
+        p_skip_nl(p)
+
+    if p_is(p, "KW", "fn"):
+        return parse_fn(p)
+    if p_is(p, "KW", "equation"):
+        return parse_equation(p)
+    if p_is(p, "KW", "algorithm"):
+        return parse_algorithm(p)
+    if p_is(p, "KW", "extern"):
+        return parse_extern(p)
+    if p_is(p, "KW", "import") or p_is(p, "KW", "use"):
+        return parse_import(p)
+    if p_is(p, "KW", "struct"):
+        return parse_struct(p)
+    if p_is(p, "KW", "enum"):
+        return parse_enum(p)
+    if p_is(p, "KW", "const"):
+        p_adv(p)
+        let cname = p_adv(p).get("val", "")
+        if p_consume(p, "PUNCT", ":"):
+            parse_type_str(p)
+        p_consume(p, "PUNCT", "=")
+        let val = parse_expr(p)
+        return {"kind": "const", "name": cname, "value": val}
+    return parse_stmt(p)
+
+fn parse_type_str(p: map) -> str:
+    let t = p_adv(p).get("val", "int")
+    if p_consume(p, "PUNCT", "["):
+        while not p_is(p, "PUNCT", "]") and not p_is_kind(p, "EOF"):
+            p_adv(p)
+        p_consume(p, "PUNCT", "]")
+    return t
+
+fn parse_params(p: map) -> list:
+    var params = []
+    p_consume(p, "PUNCT", "(")
+    while not p_is(p, "PUNCT", ")") and not p_is(p, "PUNCT", ":") and not p_is(p, "PUNCT", "{") and not p_is_kind(p, "EOF"):
+        let pname = p_adv(p).get("val", "")
+        var pty = "any"
+        if p_consume(p, "PUNCT", ":"):
+            pty = parse_type_str(p)
+        params.push({"name": pname, "ty": pty})
+        if not p_consume(p, "PUNCT", ","):
+            break
+    p_consume(p, "PUNCT", ")")
+    return params
+
+fn parse_fn(p: map) -> map:
+    let start_tok = p_adv(p)
+    let name = p_adv(p).get("val", "")
+    let params = parse_params(p)
+    var ret_ty = "any"
+    if p_consume(p, "PUNCT", "->"):
+        ret_ty = parse_type_str(p)
+    let body = parse_block(p)
+    return {"kind": "fn", "name": name, "params": params, "ret": ret_ty, "body": body, "line": start_tok.get("line", 1)}
+
+fn parse_equation(p: map) -> map:
+    let start_tok = p_adv(p)
+    let name = p_adv(p).get("val", "")
+    var params = []
+    if p_consume(p, "PUNCT", "("):
+        while not p_is(p, "PUNCT", ")") and not p_is_kind(p, "EOF"):
+            params.push(p_adv(p).get("val", ""))
+            if not p_consume(p, "PUNCT", ","):
+                break
+        p_consume(p, "PUNCT", ")")
+    p_consume(p, "PUNCT", "=")
+    p.set("in_eq", true)
+    let expr = parse_expr(p)
+    p.set("in_eq", false)
+    return {"kind": "equation", "name": name, "params": params, "expr": expr, "line": start_tok.get("line", 1)}
+
+fn parse_algorithm(p: map) -> map:
+    let start_tok = p_adv(p)
+    let name = p_adv(p).get("val", "")
+    let params = parse_params(p)
+    var ret_ty = "str"
+    if p_consume(p, "PUNCT", "->"):
+        ret_ty = parse_type_str(p)
+    let body = parse_block(p)
+    return {"kind": "algorithm", "name": name, "params": params, "ret": ret_ty, "body": body, "line": start_tok.get("line", 1)}
+
+fn parse_extern(p: map) -> map:
+    let start_tok = p_adv(p)
+    if p_is_kind(p, "STR"):
+        p_adv(p)
+    p_consume(p, "KW", "fn")
+    let name = p_adv(p).get("val", "")
+    let params = parse_params(p)
+    var ret_ty = "int"
+    if p_consume(p, "PUNCT", "->"):
+        ret_ty = parse_type_str(p)
+    return {"kind": "extern_fn", "name": name, "params": params, "ret": ret_ty, "line": start_tok.get("line", 1)}
+
+fn parse_import(p: map) -> map:
+    let tok = p_adv(p)
+    var path = ""
+    if p_is_kind(p, "STR"):
+        path = p_adv(p).get("val", "")
+    else:
+        path = p_adv(p).get("val", "")
+        while p_consume(p, "PUNCT", "::") or p_consume(p, "PUNCT", "."):
+            path = path + "::" + p_adv(p).get("val", "")
+    if p_consume(p, "KW", "as"):
+        p_adv(p)
+    return {"kind": "import", "path": path, "line": tok.get("line", 1)}
+
+fn parse_struct(p: map) -> map:
+    p_adv(p)
+    let name = p_adv(p).get("val", "")
+    parse_block_raw_skip(p)
+    return {"kind": "struct", "name": name}
+
+fn parse_enum(p: map) -> map:
+    p_adv(p)
+    let name = p_adv(p).get("val", "")
+    parse_block_raw_skip(p)
+    return {"kind": "enum", "name": name}
+
+fn parse_block_raw_skip(p: map):
+    if p_consume(p, "PUNCT", "{"):
+        while not p_is(p, "PUNCT", "}") and not p_is_kind(p, "EOF"):
+            p_adv(p)
+        p_consume(p, "PUNCT", "}")
+        return
+    p_consume(p, "PUNCT", ":")
+    p_skip_nl(p)
+    if p_consume(p, "INDENT", ""):
+        while not p_is_kind(p, "DEDENT") and not p_is_kind(p, "EOF"):
+            p_adv(p)
+        p_consume(p, "DEDENT", "")
+
+fn parse_block(p: map) -> list:
+    var stmts = []
+    if p_consume(p, "PUNCT", "{"):
+        p_skip_nl(p)
+        while not p_is(p, "PUNCT", "}") and not p_is_kind(p, "EOF"):
+            let before = p.get("pos", 0)
+            let st = parse_stmt(p)
+            if st.len() > 0:
+                stmts.push(st)
+            if p.get("pos", 0) == before:
+                p_adv(p)
+            p_skip_nl(p)
+        p_consume(p, "PUNCT", "}")
+        return stmts
+    p_consume(p, "PUNCT", ":")
+    if not p_is_kind(p, "NEWLINE") and not p_is_kind(p, "EOF"):
+        let st = parse_stmt(p)
+        if st.len() > 0:
+            stmts.push(st)
+        return stmts
+    p_skip_nl(p)
+    if not p_is_kind(p, "INDENT"):
+        return stmts
+    p_adv(p)
+    while not p_is_kind(p, "DEDENT") and not p_is_kind(p, "EOF"):
+        p_skip_nl(p)
+        if p_is_kind(p, "DEDENT") or p_is_kind(p, "EOF"):
+            break
+        let before = p.get("pos", 0)
+        let st = parse_stmt(p)
+        if st.len() > 0:
+            stmts.push(st)
+        if p.get("pos", 0) == before:
+            p_adv(p)
+        p_skip_nl(p)
+    p_consume(p, "DEDENT", "")
+    return stmts
+
+fn parse_stmt(p: map) -> map:
+    let line = p_cur(p).get("line", 1)
+    if p_is(p, "KW", "let") or p_is(p, "KW", "var"):
+        let kw = p_adv(p).get("val", "let")
+        let vname = p_adv(p).get("val", "")
+        if p_consume(p, "PUNCT", ":"):
+            parse_type_str(p)
+        p_consume(p, "PUNCT", "=")
+        let val = parse_expr(p)
+        return {"kind": kw, "name": vname, "value": val, "line": line}
+
+    if p_is(p, "KW", "if"):
+        p_adv(p)
+        let c0 = parse_expr(p)
+        let b0 = parse_block(p)
+        var branches = [{"cond": c0, "body": b0}]
+        p_skip_nl(p)
+        while p_is(p, "KW", "elif"):
+            p_adv(p)
+            let ci = parse_expr(p)
+            let bi = parse_block(p)
+            branches.push({"cond": ci, "body": bi})
+            p_skip_nl(p)
+        var eb = []
+        if p_is(p, "KW", "else"):
+            p_adv(p)
+            eb = parse_block(p)
+        return {"kind": "if", "branches": branches, "else_body": eb, "line": line}
+
+    if p_is(p, "KW", "while"):
+        p_adv(p)
+        let cond = parse_expr(p)
+        let body = parse_block(p)
+        return {"kind": "while", "cond": cond, "body": body, "line": line}
+
+    if p_is(p, "KW", "loop"):
+        p_adv(p)
+        let body = parse_block(p)
+        return {"kind": "loop", "body": body, "line": line}
+
+    if p_is(p, "KW", "for"):
+        p_adv(p)
+        let vname = p_adv(p).get("val", "")
+        p_consume(p, "KW", "in")
+        let iter = parse_expr(p)
+        let body = parse_block(p)
+        return {"kind": "for", "var": vname, "iter": iter, "body": body, "line": line}
+
+    if p_is(p, "KW", "match"):
+        p_adv(p)
+        let sub = parse_expr(p)
+        p_consume(p, "PUNCT", ":")
+        p_skip_nl(p)
+        var arms = []
+        if p_consume(p, "INDENT", ""):
+            while not p_is_kind(p, "DEDENT") and not p_is_kind(p, "EOF"):
+                p_skip_nl(p)
+                if p_is_kind(p, "DEDENT") or p_is_kind(p, "EOF"):
+                    break
+                p_consume(p, "KW", "case")
+                let pat = parse_expr(p)
+                var abody = []
+                if p_consume(p, "PUNCT", "=>"):
+                    abody = [parse_stmt(p)]
+                else:
+                    abody = parse_block(p)
+                arms.push({"pattern": pat, "body": abody})
+                p_skip_nl(p)
+            p_consume(p, "DEDENT", "")
+        return {"kind": "match", "subject": sub, "arms": arms, "line": line}
+
+    if p_is(p, "KW", "return"):
+        p_adv(p)
+        if p_is_kind(p, "NEWLINE") or p_is_kind(p, "DEDENT") or p_is(p, "PUNCT", "}") or p_is_kind(p, "EOF"):
+            return {"kind": "return", "has_val": false, "line": line}
+        let rv = parse_expr(p)
+        return {"kind": "return", "has_val": true, "value": rv, "line": line}
+
+    if p_is(p, "KW", "break"):
+        p_adv(p)
+        return {"kind": "break", "line": line}
+
+    if p_is(p, "KW", "continue"):
+        p_adv(p)
+        return {"kind": "continue", "line": line}
+
+    if p_is(p, "KW", "unsafe_hardware"):
+        p_adv(p)
+        let body = parse_block(p)
+        return {"kind": "unsafe_hardware", "body": body, "line": line}
+
+    if p_is(p, "KW", "defer"):
+        p_adv(p)
+        let inner = parse_stmt(p)
+        return {"kind": "defer", "stmt": inner, "line": line}
+
+    if p_is(p, "KW", "try"):
+        p_adv(p)
+        let tb = parse_block(p)
+        p_skip_nl(p)
+        var ev = "err"
+        var cb = []
+        if p_consume(p, "KW", "catch"):
+            if p_is_kind(p, "IDENT"):
+                ev = p_adv(p).get("val", "err")
+            cb = parse_block(p)
+        return {"kind": "try_catch", "try_body": tb, "err_var": ev, "catch_body": cb, "line": line}
+
+    if p_is(p, "KW", "throw"):
+        p_adv(p)
+        let tv = parse_expr(p)
+        return {"kind": "throw", "value": tv, "line": line}
+
+    let lhs = parse_expr(p)
+    if p_consume(p, "PUNCT", "="):
+        let rhs = parse_expr(p)
+        return {"kind": "assign", "target": lhs, "value": rhs, "line": line}
+    if p_is(p, "PUNCT", "+=") or p_is(p, "PUNCT", "-=") or p_is(p, "PUNCT", "*=") or p_is(p, "PUNCT", "/="):
+        let cop = p_adv(p).get("val", "+=")
+        let rhs = parse_expr(p)
+        return {"kind": "compound_assign", "target": lhs, "op": cop, "value": rhs, "line": line}
+    return {"kind": "expr", "expr": lhs, "line": line}
+
+fn parse_expr(p: map) -> map:
+    return parse_pipeline(p)
+
+fn parse_pipeline(p: map) -> map:
+    var left = parse_or(p)
+    while p_consume(p, "PUNCT", "|>"):
+        let rhs = parse_or(p)
+        let rk = rhs.get("kind", "")
+        if rk == "ns_call" or rk == "call":
+            var args = rhs.get("args", [])
+            var new_args = [left]
+            for a in args:
+                new_args.push(a)
+            rhs.set("args", new_args)
+            left = rhs
+        else:
+            left = {"kind": "call", "callee": rhs, "args": [left]}
+    return left
+
+fn parse_or(p: map) -> map:
+    var left = parse_and(p)
+    while p_is(p, "KW", "or") or p_is(p, "PUNCT", "||"):
+        p_adv(p)
+        let right = parse_and(p)
+        left = {"kind": "binary", "op": "or", "left": left, "right": right}
+    return left
+
+fn parse_and(p: map) -> map:
+    var left = parse_eq(p)
+    while p_is(p, "KW", "and") or p_is(p, "PUNCT", "&&"):
+        p_adv(p)
+        let right = parse_eq(p)
+        left = {"kind": "binary", "op": "and", "left": left, "right": right}
+    return left
+
+fn parse_eq(p: map) -> map:
+    var left = parse_cmp(p)
+    while p_is(p, "PUNCT", "==") or p_is(p, "PUNCT", "!="):
+        let op = p_adv(p).get("val", "==")
+        let right = parse_cmp(p)
+        left = {"kind": "binary", "op": op, "left": left, "right": right}
+    return left
+
+fn parse_cmp(p: map) -> map:
+    var left = parse_range(p)
+    while p_is(p, "PUNCT", "<") or p_is(p, "PUNCT", "<=") or p_is(p, "PUNCT", ">") or p_is(p, "PUNCT", ">="):
+        let op = p_adv(p).get("val", "<")
+        let right = parse_range(p)
+        left = {"kind": "binary", "op": op, "left": left, "right": right}
+    return left
+
+fn parse_range(p: map) -> map:
+    let left = parse_bitor(p)
+    if p_is(p, "PUNCT", "..") or p_is(p, "PUNCT", "..="):
+        let op = p_adv(p).get("val", "..")
+        let right = parse_bitor(p)
+        return {"kind": "range", "start": left, "end": right, "inclusive": op == "..="}
+    return left
+
+fn parse_bitor(p: map) -> map:
+    var left = parse_bitxor(p)
+    while p_consume(p, "PUNCT", "|"):
+        let right = parse_bitxor(p)
+        left = {"kind": "binary", "op": "|", "left": left, "right": right}
+    return left
+
+fn parse_bitxor(p: map) -> map:
+    var left = parse_bitand(p)
+    while not p.get("in_eq", false) and p_consume(p, "PUNCT", "^"):
+        let right = parse_bitand(p)
+        left = {"kind": "binary", "op": "^", "left": left, "right": right}
+    return left
+
+fn parse_bitand(p: map) -> map:
+    var left = parse_shift(p)
+    while p_consume(p, "PUNCT", "&"):
+        let right = parse_shift(p)
+        left = {"kind": "binary", "op": "&", "left": left, "right": right}
+    return left
+
+fn parse_shift(p: map) -> map:
+    var left = parse_add(p)
+    while p_is(p, "PUNCT", "<<") or p_is(p, "PUNCT", ">>"):
+        let op = p_adv(p).get("val", "<<")
+        let right = parse_add(p)
+        left = {"kind": "binary", "op": op, "left": left, "right": right}
+    return left
+
+fn parse_add(p: map) -> map:
+    var left = parse_mul(p)
+    while p_is(p, "PUNCT", "+") or p_is(p, "PUNCT", "-"):
+        let op = p_adv(p).get("val", "+")
+        let right = parse_mul(p)
+        left = {"kind": "binary", "op": op, "left": left, "right": right}
+    return left
+
+fn parse_mul(p: map) -> map:
+    var left = parse_pow(p)
+    while p_is(p, "PUNCT", "*") or p_is(p, "PUNCT", "/") or p_is(p, "PUNCT", "%"):
+        let op = p_adv(p).get("val", "*")
+        let right = parse_pow(p)
+        left = {"kind": "binary", "op": op, "left": left, "right": right}
+    return left
+
+fn parse_pow(p: map) -> map:
+    let left = parse_cast(p)
+    if p_is(p, "PUNCT", "**") or (p.get("in_eq", false) and p_is(p, "PUNCT", "^")):
+        p_adv(p)
+        let right = parse_pow(p)
+        return {"kind": "binary", "op": "**", "left": left, "right": right}
+    return left
+
+fn parse_cast(p: map) -> map:
+    var expr = parse_unary(p)
+    while p_consume(p, "KW", "as"):
+        let ty = parse_type_str(p)
+        expr = {"kind": "cast", "expr": expr, "ty": ty}
+    return expr
+
+fn parse_unary(p: map) -> map:
+    if p_is(p, "PUNCT", "-") or p_is(p, "KW", "not") or p_is(p, "PUNCT", "~") or p_is(p, "PUNCT", "!"):
+        let op = p_adv(p).get("val", "-")
+        let op_expr = parse_unary(p)
+        return {"kind": "unary", "op": op, "operand": op_expr}
+    return parse_postfix(p)
+
+fn parse_arg_list(p: map) -> list:
+    var args = []
+    while not p_is(p, "PUNCT", ")") and not p_is_kind(p, "EOF"):
+        args.push(parse_expr(p))
+        if not p_consume(p, "PUNCT", ","):
+            break
+    p_consume(p, "PUNCT", ")")
+    return args
+
+fn parse_postfix(p: map) -> map:
+    var expr = parse_primary(p)
+    while true:
+        if p_consume(p, "PUNCT", "("):
+            let args = parse_arg_list(p)
+            expr = {"kind": "call", "callee": expr, "args": args}
+        elif p_consume(p, "PUNCT", "."):
+            let mname = p_adv(p).get("val", "")
+            if p_consume(p, "PUNCT", "("):
+                let args = parse_arg_list(p)
+                expr = {"kind": "method", "recv": expr, "method": mname, "args": args}
+            else:
+                expr = {"kind": "field", "recv": expr, "field": mname}
+        elif p_consume(p, "PUNCT", "["):
+            let idx = parse_expr(p)
+            p_consume(p, "PUNCT", "]")
+            expr = {"kind": "index", "recv": expr, "index": idx}
+        else:
+            break
+    return expr
+
+fn parse_primary(p: map) -> map:
+    let t = p_adv(p)
+    let k = t.get("kind", "")
+    let v = t.get("val", "")
+    if k == "INT":
+        return {"kind": "int", "val": v}
+    if k == "HEX":
+        return {"kind": "hex", "val": v}
+    if k == "FLOAT":
+        return {"kind": "float", "val": v}
+    if k == "STR":
+        return {"kind": "str", "val": v}
+    if k == "FSTR":
+        return {"kind": "fstr", "val": v}
+    if k == "BOOL":
+        return {"kind": "bool", "val": v}
+    if k == "NONE":
+        return {"kind": "none"}
+    if k == "IDENT":
+        if p_consume(p, "PUNCT", "::"):
+            let member = p_adv(p).get("val", "")
+            if p_consume(p, "PUNCT", "("):
+                let args = parse_arg_list(p)
+                return {"kind": "ns_call", "ns": v, "fn": member, "args": args}
+            return {"kind": "str", "val": v + "::" + member}
+        return {"kind": "ident", "name": v}
+    if k == "PUNCT" and v == "(":
+        let inner = parse_expr(p)
+        p_consume(p, "PUNCT", ")")
+        return inner
+    if k == "PUNCT" and v == "[":
+        var elems = []
+        while not p_is(p, "PUNCT", "]") and not p_is_kind(p, "EOF"):
+            elems.push(parse_expr(p))
+            if not p_consume(p, "PUNCT", ","):
+                break
+        p_consume(p, "PUNCT", "]")
+        return {"kind": "list", "items": elems}
+    if k == "PUNCT" and v == "{":
+        var entries = []
+        while not p_is(p, "PUNCT", "}") and not p_is_kind(p, "EOF"):
+            let ek = parse_expr(p)
+            p_consume(p, "PUNCT", ":")
+            let ev = parse_expr(p)
+            entries.push({"key": ek, "val": ev})
+            if not p_consume(p, "PUNCT", ","):
+                break
+        p_consume(p, "PUNCT", "}")
+        return {"kind": "map", "entries": entries}
+    return {"kind": "none"}

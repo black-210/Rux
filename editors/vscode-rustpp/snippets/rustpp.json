@@ -1,0 +1,29 @@
+{
+  "Direct Equation": {
+    "prefix": "eq",
+    "body": ["equation ${1:f}(${2:x}) = ${3:x^2 - 5x + 6}", "let root = math::solve(\"${1:f}\", ${4:4.0})"],
+    "description": "Define a direct mathematical equation and solve it"
+  },
+  "Leak-Guarded Allocation": {
+    "prefix": "alloc",
+    "body": ["let ${1:buf} = memory::alloc(${2:256})", "defer memory::free(${1:buf})"],
+    "description": "Allocate buffer with deterministic defer leak guard"
+  },
+  "SDR Capture & FFT": {
+    "prefix": "sdr",
+    "body": [
+      "let dev = sdr::open(\"${1:sim}\")",
+      "defer sdr::close(dev)",
+      "sdr::set_center_freq(dev, ${2:433.92MHz})",
+      "sdr::set_sample_rate(dev, ${3:2.4Msps})",
+      "let iq = sdr::capture_iq(dev, ${4:64})",
+      "let spectrum = sdr::fft_spectrum(iq)"
+    ],
+    "description": "Initialize SDR radio capture & FFT spectrum"
+  },
+  "Synthesize Algorithm": {
+    "prefix": "synth",
+    "body": ["let code = synth::synthesize_from_examples(\"${1:my_algo}\", [${2:1, 2, 3}], [${3:4, 7, 10}])", "io::print(code)"],
+    "description": "Generate an algorithm automatically from I/O examples"
+  }
+}

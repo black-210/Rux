@@ -1,0 +1,8 @@
+[package]
+name = "rspp_core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Stage-0 bootstrap core compiler, mathematical error analyzer, leak guard, SDR/equation/synthesis VM, and C11/kernel codegen for rust++ (.rspp)"
+
+[dependencies]

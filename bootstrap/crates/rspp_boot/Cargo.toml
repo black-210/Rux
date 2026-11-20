@@ -1,0 +1,17 @@
+[package]
+name = "rspp_boot"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Stage-0 bootstrap CLI (rspp / rustpp) used to compile the self-hosted compiler compiler/main.rspp"
+
+[[bin]]
+name = "rspp"
+path = "src/main.rs"
+
+[[bin]]
+name = "rustpp"
+path = "src/rustpp.rs"
+
+[dependencies]
+rspp_core = { path = "../rspp_core" }

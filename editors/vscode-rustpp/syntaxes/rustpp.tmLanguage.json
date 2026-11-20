@@ -1,0 +1,55 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "rust++",
+  "scopeName": "source.rustpp",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#keywords" },
+    { "include": "#namespaces" },
+    { "include": "#numbers" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.double-slash.rustpp", "match": "(//|#).*$" },
+        { "name": "comment.block.rustpp", "begin": "/\\*", "end": "\\*/" }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        { "name": "string.quoted.double.fstring.rustpp", "begin": "f\"", "end": "\"", "patterns": [{ "name": "constant.character.escape.rustpp", "match": "\\\\." }] },
+        { "name": "string.quoted.double.rustpp", "begin": "\"", "end": "\"", "patterns": [{ "name": "constant.character.escape.rustpp", "match": "\\\\." }] },
+        { "name": "string.quoted.single.rustpp", "begin": "'", "end": "'", "patterns": [{ "name": "constant.character.escape.rustpp", "match": "\\\\." }] }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        { "name": "keyword.control.rustpp", "match": "\\b(if|elif|else|for|in|while|loop|match|case|return|break|continue|defer|try|catch|throw)\\b" },
+        { "name": "keyword.declaration.rustpp", "match": "\\b(fn|equation|algorithm|struct|enum|let|var|const|import|use|extern|unsafe_hardware)\\b" },
+        { "name": "keyword.operator.logical.rustpp", "match": "\\b(and|or|not|as)\\b" },
+        { "name": "constant.language.rustpp", "match": "\\b(true|false|none|None)\\b" }
+      ]
+    },
+    "namespaces": {
+      "patterns": [
+        { "name": "support.class.namespace.rustpp", "match": "\\b(memory|hardware|power|cpu|gpu|display|time|kernel|security|sdr|math|synth|io|fs|net|sys|str|ffi)(?=::)" },
+        { "name": "entity.name.function.call.rustpp", "match": "(?<=::)[A-Za-z_][A-Za-z0-9_]*" }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.hex.rustpp", "match": "\\b0[xX][0-9a-fA-F_]+\\b" },
+        { "name": "constant.numeric.bin.rustpp", "match": "\\b0[bB][01_]+\\b" },
+        { "name": "constant.numeric.physical.rustpp", "match": "\\b[0-9]+(\\.[0-9]+)?(V|mV|GHz|MHz|kHz|Hz|Msps|ksps|sps|dBm|rad|deg|ns|us|ms|s)\\b" },
+        { "name": "constant.numeric.decimal.rustpp", "match": "\\b[0-9_]+(\\.[0-9_]+)?\\b" }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        { "name": "keyword.operator.pipeline.rustpp", "match": "\\|>|->|=>|::|\\*\\*|\\.\\.=?" }
+      ]
+    }
+  }
+}

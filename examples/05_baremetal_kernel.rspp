@@ -1,0 +1,9 @@
+// Example 05: Bare-Metal x86_64 Kernel Target (`rspp build examples/05_baremetal_kernel.rspp --target kernel`)
+@kernel
+fn kernel_main():
+    display::clear()
+    display::vga_print("rust++ Bare-Metal Kernel Booted!", 0, 0x0A)
+    unsafe_hardware:
+        hardware::out_port(0x3F8, 82)
+        kernel::cli()
+        kernel::halt()

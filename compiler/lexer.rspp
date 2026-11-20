@@ -1,0 +1,266 @@
+// rust++ Self-Hosted Lexer (written in rust++ itself)
+
+fn is_alpha_or_us(c: int) -> bool:
+    return (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or c == 95
+
+fn is_digit(c: int) -> bool:
+    return c >= 48 and c <= 57
+
+fn is_hex(c: int) -> bool:
+    return is_digit(c) or (c >= 65 and c <= 70) or (c >= 97 and c <= 102)
+
+fn is_keyword(w: str) -> bool:
+    let kws = ["fn", "let", "var", "if", "elif", "else", "for", "in", "while", "loop", "match", "case", "return", "break", "continue", "struct", "enum", "import", "use", "extern", "unsafe_hardware", "equation", "algorithm", "defer", "try", "catch", "throw", "true", "false", "none", "None", "and", "or", "not", "as", "const"]
+    return kws.contains(w)
+
+fn make_tok(kind: str, val: str, line: int) -> map:
+    return {"kind": kind, "val": val, "line": line}
+
+fn tokenize_source(src: str) -> list:
+    var tokens = []
+    var indent_stack = [0]
+    var pos = 0
+    var line = 1
+    var at_line_start = true
+    var delim_depth = 0
+    let n = src.len()
+
+    while pos < n:
+        if at_line_start and delim_depth == 0:
+            var ind = 0
+            while pos < n:
+                let b = src.char_code_at(pos)
+                if b == 32:
+                    ind += 1
+                    pos += 1
+                elif b == 9:
+                    ind += 4
+                    pos += 1
+                elif b == 13:
+                    pos += 1
+                else:
+                    break
+            if pos >= n:
+                break
+            let nxt = src.char_code_at(pos)
+            if nxt == 10:
+                pos += 1
+                line += 1
+                continue
+            if nxt == 35 or (nxt == 47 and pos + 1 < n and src.char_code_at(pos + 1) == 47):
+                while pos < n and src.char_code_at(pos) != 10:
+                    pos += 1
+                continue
+            let cur_ind = indent_stack[indent_stack.len() - 1]
+            if ind > cur_ind:
+                indent_stack.push(ind)
+                tokens.push(make_tok("INDENT", "", line))
+            elif ind < cur_ind:
+                while indent_stack.len() > 1 and indent_stack[indent_stack.len() - 1] > ind:
+                    indent_stack.pop()
+                    tokens.push(make_tok("DEDENT", "", line))
+            at_line_start = false
+
+        if pos >= n:
+            break
+        let b = src.char_code_at(pos)
+
+        if b == 32 or b == 9 or b == 13:
+            pos += 1
+            continue
+
+        if b == 10:
+            pos += 1
+            if delim_depth == 0:
+                if tokens.len() > 0:
+                    let lk = tokens[tokens.len() - 1].get("kind", "")
+                    if lk != "NEWLINE" and lk != "INDENT" and lk != "DEDENT":
+                        tokens.push(make_tok("NEWLINE", "\n", line))
+                at_line_start = true
+            line += 1
+            continue
+
+        // Line comments `#` or `//`
+        if b == 35 or (b == 47 and pos + 1 < n and src.char_code_at(pos + 1) == 47):
+            while pos < n and src.char_code_at(pos) != 10:
+                pos += 1
+            continue
+
+        // Block comment `/* ... */`
+        if b == 47 and pos + 1 < n and src.char_code_at(pos + 1) == 42:
+            pos += 2
+            var cdepth = 1
+            while pos < n and cdepth > 0:
+                let cb = src.char_code_at(pos)
+                if cb == 10:
+                    line += 1
+                if cb == 47 and pos + 1 < n and src.char_code_at(pos + 1) == 42:
+                    cdepth += 1
+                    pos += 2
+                elif cb == 42 and pos + 1 < n and src.char_code_at(pos + 1) == 47:
+                    cdepth -= 1
+                    pos += 2
+                else:
+                    pos += 1
+            continue
+
+        // f-string `f"..."` or `f'...'`
+        var is_fstr = false
+        if b == 102 and pos + 1 < n:
+            let q2 = src.char_code_at(pos + 1)
+            if q2 == 34 or q2 == 39:
+                is_fstr = true
+                pos += 1
+
+        let qb = src.char_code_at(pos)
+        if qb == 34 or qb == 39:
+            let quote = qb
+            pos += 1
+            var sval = ""
+            while pos < n:
+                let sc = src.char_code_at(pos)
+                if sc == quote:
+                    pos += 1
+                    break
+                if sc == 10:
+                    break
+                if sc == 92 and pos + 1 < n:
+                    pos += 1
+                    let esc = src.char_code_at(pos)
+                    pos += 1
+                    if esc == 110:
+                        sval = sval + "\n"
+                    elif esc == 116:
+                        sval = sval + "\t"
+                    elif esc == 114:
+                        sval = sval + "\r"
+                    elif esc == 48:
+                        sval = sval + "\0"
+                    elif esc == 92:
+                        sval = sval + "\\"
+                    elif esc == 34:
+                        sval = sval + "\""
+                    elif esc == 39:
+                        sval = sval + "'"
+                    else:
+                        sval = sval + str::from_code(esc)
+                else:
+                    sval = sval + src.char_at(pos)
+                    pos += 1
+            if is_fstr:
+                tokens.push(make_tok("FSTR", sval, line))
+            else:
+                tokens.push(make_tok("STR", sval, line))
+            continue
+
+        // Hex or Binary literal
+        if b == 48 and pos + 1 < n:
+            let p2 = src.char_code_at(pos + 1)
+            if p2 == 120 or p2 == 88 or p2 == 98 or p2 == 66:
+                let start_p = pos
+                pos += 2
+                while pos < n and (is_hex(src.char_code_at(pos)) or src.char_code_at(pos) == 95):
+                    pos += 1
+                let hraw = src.slice(start_p, pos).replace("_", "")
+                tokens.push(make_tok("HEX", hraw, line))
+                continue
+
+        // Number + optional physical/SDR unit or implicit math coefficient
+        if is_digit(b):
+            let start_n = pos
+            var is_flt = false
+            while pos < n:
+                let nc = src.char_code_at(pos)
+                if is_digit(nc) or nc == 95:
+                    pos += 1
+                elif nc == 46 and not is_flt and pos + 1 < n and is_digit(src.char_code_at(pos + 1)):
+                    is_flt = true
+                    pos += 1
+                else:
+                    break
+            let nstr = src.slice(start_n, pos).replace("_", "")
+            let u_start = pos
+            while pos < n and is_alpha_or_us(src.char_code_at(pos)):
+                pos += 1
+            let unit = src.slice(u_start, pos)
+            if unit == "":
+                if is_flt:
+                    tokens.push(make_tok("FLOAT", nstr, line))
+                else:
+                    tokens.push(make_tok("INT", nstr, line))
+            elif unit == "V":
+                tokens.push(make_tok("FLOAT", str::from_int(str::to_float(nstr) * 1000.0 as int), line))
+            elif unit == "mV" or unit == "Hz" or unit == "sps" or unit == "dBm" or unit == "rad" or unit == "ns":
+                tokens.push(make_tok("FLOAT", nstr, line))
+            elif unit == "kHz" or unit == "ksps" or unit == "us":
+                let scaled = (str::to_float(nstr) * 1000.0) as str
+                tokens.push(make_tok("FLOAT", scaled, line))
+            elif unit == "MHz" or unit == "Msps" or unit == "ms":
+                let scaled = (str::to_float(nstr) * 1000000.0) as str
+                tokens.push(make_tok("FLOAT", scaled, line))
+            elif unit == "GHz" or unit == "s":
+                let scaled = (str::to_float(nstr) * 1000000000.0) as str
+                tokens.push(make_tok("FLOAT", scaled, line))
+            elif unit == "deg":
+                let scaled = (str::to_float(nstr) * 0.017453292519943295) as str
+                tokens.push(make_tok("FLOAT", scaled, line))
+            else:
+                if is_flt:
+                    tokens.push(make_tok("FLOAT", nstr, line))
+                else:
+                    tokens.push(make_tok("INT", nstr, line))
+                tokens.push(make_tok("PUNCT", "*", line))
+                tokens.push(make_tok("IDENT", unit, line))
+            continue
+
+        // Identifiers & keywords
+        if is_alpha_or_us(b):
+            let start_id = pos
+            while pos < n:
+                let ic = src.char_code_at(pos)
+                if is_alpha_or_us(ic) or is_digit(ic):
+                    pos += 1
+                else:
+                    break
+            let word = src.slice(start_id, pos)
+            if word == "true" or word == "false":
+                tokens.push(make_tok("BOOL", word, line))
+            elif word == "none" or word == "None":
+                tokens.push(make_tok("NONE", "none", line))
+            elif is_keyword(word):
+                tokens.push(make_tok("KW", word, line))
+            else:
+                tokens.push(make_tok("IDENT", word, line))
+            continue
+
+        // Multi-char & single-char punctuation
+        let c1 = src.char_at(pos)
+        var c2 = ""
+        if pos + 1 < n:
+            c2 = src.slice(pos, pos + 2)
+        if c2 == "::" or c2 == "->" or c2 == "=>" or c2 == "|>" or c2 == "**" or c2 == "==" or c2 == "!=" or c2 == "<=" or c2 == ">=" or c2 == "+=" or c2 == "-=" or c2 == "*=" or c2 == "/=" or c2 == "<<" or c2 == ">>" or c2 == ".." or c2 == "&&" or c2 == "||":
+            if c2 == ".." and pos + 2 < n and src.char_at(pos + 2) == "=":
+                tokens.push(make_tok("PUNCT", "..=", line))
+                pos += 3
+            else:
+                tokens.push(make_tok("PUNCT", c2, line))
+                pos += 2
+            continue
+
+        if c1 == "(" or c1 == "[" or c1 == "{":
+            delim_depth += 1
+        elif c1 == ")" or c1 == "]" or c1 == "}":
+            if delim_depth > 0:
+                delim_depth -= 1
+        tokens.push(make_tok("PUNCT", c1, line))
+        pos += 1
+
+    if tokens.len() > 0:
+        let lk = tokens[tokens.len() - 1].get("kind", "")
+        if lk != "NEWLINE" and lk != "DEDENT":
+            tokens.push(make_tok("NEWLINE", "\n", line))
+    while indent_stack.len() > 1:
+        indent_stack.pop()
+        tokens.push(make_tok("DEDENT", "", line))
+    tokens.push(make_tok("EOF", "", line))
+    return tokens

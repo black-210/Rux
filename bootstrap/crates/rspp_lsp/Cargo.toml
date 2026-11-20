@@ -1,0 +1,13 @@
+[package]
+name = "rspp_lsp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Language Server Protocol (rspp-lsp) for rust++ (.rspp) in VS Code"
+
+[[bin]]
+name = "rspp-lsp"
+path = "src/main.rs"
+
+[dependencies]
+rspp_core = { path = "../rspp_core" }

@@ -1,0 +1,48 @@
+{
+  "name": "vscode-rustpp",
+  "displayName": "rust++ (.rspp) — Hardware, Kernel, SDR, Math & Self-Hosting Language",
+  "description": "Official VS Code support for rust++ (.rspp): LSP smart completions, mathematical error diagnosis & auto-fixes, Leak Guard checks, SDR & equation highlighting.",
+  "version": "0.2.0",
+  "publisher": "rustpp-lang",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Programming Languages", "Linters", "Snippets"],
+  "activationEvents": ["onLanguage:rustpp"],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "rustpp",
+        "aliases": ["rust++", "Rust++", "rspp"],
+        "extensions": [".rspp"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "rustpp",
+        "scopeName": "source.rustpp",
+        "path": "./syntaxes/rustpp.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "rustpp",
+        "path": "./snippets/rustpp.json"
+      }
+    ],
+    "commands": [
+      { "command": "rustpp.checkFile", "title": "rust++: Check & Diagnose (.rspp)" },
+      { "command": "rustpp.fixFile", "title": "rust++: Auto-Fix Math, Typos & Memory Leaks" },
+      { "command": "rustpp.runFile", "title": "rust++: Run Program" },
+      { "command": "rustpp.buildFile", "title": "rust++: Compile Native Binary" }
+    ],
+    "configuration": {
+      "title": "rust++",
+      "properties": {
+        "rustpp.compilerPath": { "type": "string", "default": "rspp", "description": "Path to rspp compiler binary" },
+        "rustpp.lspPath": { "type": "string", "default": "rspp-lsp", "description": "Path to rspp-lsp server" },
+        "rustpp.diagnosticLanguage": { "type": "string", "enum": ["both", "en", "ar"], "default": "both" }
+      }
+    }
+  }
+}

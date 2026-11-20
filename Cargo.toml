@@ -1,12 +1,12 @@
 [workspace]
 members = [
-    "nabda/crates/nabda_core",
-    "nabda/crates/nabda_cli",
-    "nabda/crates/nabda_lsp",
+    "bootstrap/crates/rspp_core",
+    "bootstrap/crates/rspp_boot",
+    "bootstrap/crates/rspp_lsp",
 ]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "Apache-2.0"

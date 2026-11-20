@@ -1,0 +1,15 @@
+// Example 03: Algorithm Generating Other Algorithms (`synth::`)
+algorithm meta_synthesizer(target_name: str, inputs: list, outputs: list) -> str:
+    io::print(f"Synthesizing algorithm `{target_name}` from I/O examples...")
+    return synth::synthesize_from_examples(target_name, inputs, outputs)
+
+fn main():
+    let linear_algo = meta_synthesizer("predict_pwm", [1, 2, 3, 4], [4, 7, 10, 13])
+    let quad_algo = synth::synthesize_from_examples("quad_curve", [0, 1, 2, 3], [1, 4, 9, 16])
+    let fir_algo = synth::generate_dsp_filter("lowpass", 120.0kHz, 2.4Msps, 11)
+    let crypto_algo = synth::evolve_crypto_mixer("secure_mix", 4, 0x9E3779B9)
+
+    io::print(linear_algo)
+    io::print(quad_algo)
+    io::print(fir_algo)
+    io::print(crypto_algo)

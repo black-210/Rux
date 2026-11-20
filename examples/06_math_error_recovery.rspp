@@ -1,0 +1,10 @@
+// Example 06: Deliberate Errors to Showcase Math Diagnostics & Leak Guard Auto-Fix (`rspp check` / `rspp fix`)
+// WARNING: Intentionally contains errors for demonstration; run `rspp check examples/06_math_error_recovery.rspp`.
+fn broken_demo():
+    let buffer = memory::alloc(256)
+    power::set_voltage("vcore", 2.2V)
+    memory::protect(buffer, 256, "RWX")
+    hardware::fan_spede(80)
+    let auth_secret = "token123"
+    let ok = auth_secret == "token123"
+    io::print(ok)
